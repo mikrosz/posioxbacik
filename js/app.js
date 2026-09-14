@@ -122,15 +122,17 @@ function showBriefing() {
 }
 function showIntroAudio() {
   state.screen = "intro-audio"; saveState();
-  render(`<div class="transition-screen" aria-hidden="true"><div class="zmuda-jaw"></div></div>`, "zmuda-transition");
+  render(`<div class="transition-screen" aria-hidden="true"><div class="zmuda-jaw"></div><div class="loading-glitch"></div></div>`, "zmuda-transition");
   const audio = new Audio("./audio/wszystkowtemacie.mp3");
+  audio.preload = "auto";
   backgroundAudio = audio;
   let finished = false;
   const finish = () => { if (finished) return; finished = true; backgroundAudio = null; showBriefing(); };
   const fallback = () => { if (finished) return; finished = true; console.warn("Brak pliku audio lub nie można go odtworzyć: audio/wszystkowtemacie.mp3"); setTimeout(() => { backgroundAudio = null; showBriefing(); }, 1000); };
   audio.addEventListener("ended", finish, { once: true });
   audio.addEventListener("error", fallback, { once: true });
-  audio.play().catch(fallback);
+  audio.addEventListener("canplaythrough", () => { document.querySelector(".loading-glitch")?.remove(); audio.play().catch(fallback); }, { once: true });
+  audio.load();
 }
 function pinPreview() { return config.stages.map((_, i) => `<span class="pin-box ${state.digits[i] ? "digit-reveal" : "hidden"}">${state.digits[i] || "_"}</span>`).join(""); }
 function showStage() {

@@ -33,6 +33,10 @@ button { cursor: pointer; }
 .zmuda-transition { width: min(100%, 580px); max-width: 580px; }
 .transition-screen { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; overflow: hidden; background: linear-gradient(90deg, #000000b8, #00000030), url("../assets/images/Zmuda%20background.png") center / contain no-repeat; background-color: #000; }
 .zmuda-jaw { position: absolute; inset: 0; background: url("../assets/images/Zmuda%20background.png") center / contain no-repeat; clip-path: polygon(59% 36%, 88% 36%, 89% 50%, 57% 50%); animation: zmuda-speaking .17s ease-in-out infinite alternate; }
+.loading-glitch { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: .92; background: repeating-linear-gradient(0deg, transparent 0 3px, #00eaff 3px 4px, transparent 4px 8px, #ff174f 8px 9px, transparent 9px 14px); mix-blend-mode: screen; animation: loading-signal .16s steps(2, jump-none) infinite; }
+.loading-glitch::before, .loading-glitch::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 28px, #2455ff 28px 31px, transparent 31px 72px); opacity: .55; }
+.loading-glitch::before { transform: translateX(-12px); animation: loading-shift .24s steps(2, jump-none) infinite; }
+.loading-glitch::after { transform: translateX(15px); opacity: .35; animation: loading-shift .31s steps(2, jump-none) infinite reverse; }
 .transition-status { color: #fff; font-size: .72rem; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; text-shadow: 0 0 14px #8b5cf6; }
 .cursor { animation: blink 1s steps(2, jump-none) infinite; }
 .eyebrow, .label, .stage-kicker, .status, .debug-title { color: var(--accent-bright); font-size: .7rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
@@ -125,6 +129,8 @@ h2 { font-size: clamp(1.55rem, 7vw, 2.3rem); letter-spacing: -.04em; }
 @keyframes shake { 25% { transform: translateX(-8px); } 50% { transform: translateX(8px); } 75% { transform: translateX(-4px); } }
 @keyframes digit-in { from { opacity: 0; transform: scale(.7); filter: blur(5px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
 @keyframes zmuda-speaking { from { transform: translateY(-1px); } to { transform: translateY(1.8px); } }
+@keyframes loading-signal { 0% { transform: translate(0, 0); filter: contrast(1); } 35% { transform: translate(-4px, 1px); filter: contrast(1.5); } 70% { transform: translate(5px, -1px); filter: contrast(1.2); } 100% { transform: translate(0, 0); filter: contrast(1); } }
+@keyframes loading-shift { 0%, 100% { clip-path: inset(6% 0 72% 0); } 50% { clip-path: inset(62% 0 14% 0); } }
 @keyframes logo-letter-glitch { 0%, 42%, 100% { transform: translateX(0) skewX(0); } 44% { transform: translateX(-5px) skewX(-4deg); } 48% { transform: translateX(6px) skewX(3deg); } 52% { transform: translateX(-2px) skewX(0); } 56% { transform: translateX(3px) skewX(-2deg); } 60% { transform: translateX(0) skewX(0); } }
 @keyframes glitch-layer-one { 0%, 34%, 100% { opacity: 0; clip-path: inset(0 100% 100% 0); transform: translateX(0); } 36% { opacity: 1; clip-path: inset(12% 0 67% 0); transform: translateX(-9px); } 42% { opacity: .85; clip-path: inset(62% 0 20% 0); transform: translateX(7px); } 48% { opacity: 0; } }
 @keyframes glitch-layer-two { 0%, 48%, 100% { opacity: 0; clip-path: inset(0 100% 100% 0); transform: translateX(0); } 50% { opacity: 1; clip-path: inset(40% 0 39% 0); transform: translateX(9px); } 56% { opacity: .9; clip-path: inset(4% 0 79% 0); transform: translateX(-6px); } 62% { opacity: 0; } }
