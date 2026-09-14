@@ -127,8 +127,8 @@ function showIntroAudio() {
   audio.preload = "auto";
   backgroundAudio = audio;
   let finished = false;
-  const finish = () => { if (finished) return; finished = true; backgroundAudio = null; showBriefing(); };
-  const fallback = () => { if (finished) return; finished = true; console.warn("Brak pliku audio lub nie można go odtworzyć: audio/wszystkowtemacie.mp3"); setTimeout(() => { backgroundAudio = null; showBriefing(); }, 1000); };
+  const finish = () => { if (finished) return; finished = true; backgroundAudio = null; showStage(); };
+  const fallback = () => { if (finished) return; finished = true; console.warn("Brak pliku audio lub nie można go odtworzyć: audio/wszystkowtemacie.mp3"); setTimeout(() => { backgroundAudio = null; showStage(); }, 1000); };
   audio.addEventListener("ended", finish, { once: true });
   audio.addEventListener("error", fallback, { once: true });
   audio.addEventListener("canplaythrough", () => { document.querySelector(".loading-glitch")?.remove(); audio.play().catch(fallback); }, { once: true });
@@ -185,4 +185,4 @@ function showComplete() { render(`${header("ACCESS GRANTED")}<div class="content
 function bindDebug() { document.querySelectorAll("[data-action]").forEach(b => b.addEventListener("click", () => b.dataset.action === "start" ? showIntroAudio() : b.dataset.action === "briefing" ? showStage() : b.dataset.action === "home" ? (state = defaultState(), saveState(), showStart()) : b.dataset.action === "next" ? (state.currentStage >= config.stages.length ? showFinalAudio() : showStage()) : null)); document.querySelectorAll("[data-debug]").forEach(b => b.addEventListener("click", () => { const action = b.dataset.debug; if (action === "reset" || action === "clear") { localStorage.removeItem(storageKey); state = defaultState(); showStart(); } else if (action === "skip" && state.currentStage < config.stages.length) { state.digits[state.currentStage] = config.stages[state.currentStage].digit; state.completedStages = [...new Set([...state.completedStages, config.stages[state.currentStage].id])]; state.currentStage = Math.min(state.currentStage + 1, config.stages.length); saveState(); showStage(); } else if (action === "final") { state.currentStage = config.stages.length; saveState(); showFinalAudio(); } })); document.querySelectorAll("[data-stage]").forEach(b => b.addEventListener("click", () => { state.currentStage = Number(b.dataset.stage); state.screen = "stage"; saveState(); showStage(); })); }
 
 if (!config) showInvalid();
-else { state = loadState(); if (state.completed) showComplete(); else if (state.screen === "stage") showStage(); else if (state.screen === "briefing") showBriefing(); else if (state.screen === "intro-audio") showIntroAudio(); else if (state.screen === "final-audio") showFinalAudio(); else if (state.currentStage > 0) showDigit(); else showStart(); }
+else { state = loadState(); if (state.completed) showComplete(); else if (state.screen === "stage") showStage(); else if (state.screen === "briefing") showStage(); else if (state.screen === "intro-audio") showIntroAudio(); else if (state.screen === "final-audio") showFinalAudio(); else if (state.currentStage > 0) showDigit(); else showStart(); }
