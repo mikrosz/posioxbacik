@@ -31,8 +31,7 @@ button { cursor: pointer; }
 .start-page { background-image: linear-gradient(90deg, #000000d9 0%, #00000099 42%, #00000026 100%), linear-gradient(0deg, #000000aa 0%, transparent 28%, transparent 76%, #00000066 100%), url("../assets/images/zmudaxposio%20main%20page.png"); background-size: cover; background-position: center; background-repeat: no-repeat; }
 .boot-screen { width: min(100%, 580px); display: grid; place-items: center; color: var(--accent); font-size: 2rem; }
 .zmuda-transition { width: min(100%, 580px); max-width: 580px; }
-.transition-screen { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; overflow: hidden; background: linear-gradient(90deg, #000000b8, #00000030), url("../assets/images/Zmuda%20background.png") center / contain no-repeat; background-color: #000; }
-.zmuda-jaw { position: absolute; inset: 0; background: url("../assets/images/Zmuda%20background.png") center / contain no-repeat; clip-path: polygon(59% 36%, 88% 36%, 89% 50%, 57% 50%); animation: zmuda-speaking .17s ease-in-out infinite alternate; }
+.transition-screen { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; overflow: hidden; background: linear-gradient(90deg, #00000080, #00000018), url("../assets/images/zmudagada.gif") center / contain no-repeat; background-color: #000; }
 .loading-glitch { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: .92; background: repeating-linear-gradient(0deg, transparent 0 3px, #00eaff 3px 4px, transparent 4px 8px, #ff174f 8px 9px, transparent 9px 14px); mix-blend-mode: screen; animation: loading-signal .16s steps(2, jump-none) infinite; }
 .loading-glitch::before, .loading-glitch::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 28px, #2455ff 28px 31px, transparent 31px 72px); opacity: .55; }
 .loading-glitch::before { transform: translateX(-12px); animation: loading-shift .24s steps(2, jump-none) infinite; }
@@ -96,6 +95,14 @@ h2 { font-size: clamp(1.55rem, 7vw, 2.3rem); letter-spacing: -.04em; }
 .progress-track { height: 2px; background: var(--line); overflow: hidden; }
 .progress-bar { height: 100%; background: var(--accent); transition: width .4s ease; }
 .puzzle-panel, .audio-panel, .final-panel, .invalid-panel { margin-top: 28px; padding: 24px; border: 1px solid var(--line); background: var(--panel); }
+.game-panel { margin-top: 28px; padding: 20px; border: 1px solid var(--line); background: var(--panel); }
+.game-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.game-score { color: var(--accent-bright); font-size: .7rem; font-weight: 700; letter-spacing: .12em; white-space: nowrap; }
+.game-instruction { margin-top: 14px; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+#jump-game { display: block; width: 100%; height: auto; margin-top: 20px; border: 1px solid #282331; background: #050505; }
+.jump-button { width: 100%; margin-top: 14px; }
+.game-feedback { min-height: 22px; margin-top: 12px; color: var(--accent-bright); font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.game-fail { color: var(--danger); }
 .puzzle-text { margin-top: 22px; color: #ddd8e5; line-height: 1.65; white-space: pre-line; }
 .answer-form { margin-top: 28px; }
 .label { display: block; margin-bottom: 10px; }
