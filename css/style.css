@@ -31,7 +31,7 @@ button { cursor: pointer; }
 .start-page { background-image: linear-gradient(90deg, #000000d9 0%, #00000099 42%, #00000026 100%), linear-gradient(0deg, #000000aa 0%, transparent 28%, transparent 76%, #00000066 100%), url("../assets/images/zmudaxposio%20main%20page.png"); background-size: cover; background-position: center; background-repeat: no-repeat; }
 .boot-screen { width: min(100%, 580px); display: grid; place-items: center; color: var(--accent); font-size: 2rem; }
 .zmuda-transition { width: min(100%, 580px); max-width: 580px; }
-.transition-screen { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; overflow: hidden; background: linear-gradient(90deg, #00000080, #00000018), url("../assets/images/zmudagada.gif") center / contain no-repeat; background-color: #000; }
+.transition-screen { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; overflow: hidden; background: linear-gradient(90deg, #00000080, #00000018), url("../assets/images/zmudagada-v2.gif") center / contain no-repeat; background-color: #000; }
 .loading-glitch { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: .92; background: repeating-linear-gradient(0deg, transparent 0 3px, #00eaff 3px 4px, transparent 4px 8px, #ff174f 8px 9px, transparent 9px 14px); mix-blend-mode: screen; animation: loading-signal .16s steps(2, jump-none) infinite; }
 .loading-glitch::before, .loading-glitch::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 28px, #2455ff 28px 31px, transparent 31px 72px); opacity: .55; }
 .loading-glitch::before { transform: translateX(-12px); animation: loading-shift .24s steps(2, jump-none) infinite; }
