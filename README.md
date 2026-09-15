@@ -32,6 +32,12 @@ Zdjęcia i inne grafiki umieszczaj w folderze `assets/images/`. Możesz odwoływ
 
 Brak pliku nie zatrzymuje gry: pojawi się komunikat trybu testowego, a po sekundzie gra przejdzie dalej. Brak jest też logowany w konsoli przeglądarki.
 
+## Etap Contra
+
+Trzeci etap działa w natywnej logice 256×240 przy stałym kroku 60 Hz. Na klawiaturze użyj strzałek (ruch/celowanie), `Z` (strzał), `X` lub spacji (skok) oraz `P`/`Esc` (pauza). Na telefonie dostępny jest pad ekranowy. Etap ma kolizje platform i wody, respawn, życia, przeciwników, pociski oraz bramę bazy do zniszczenia.
+
+Repozytorium referencyjne `nes-contra-us` jest disassemblyem NES i nie zawiera ROM-u, grafik ani dźwięku. Lokalna implementacja odwzorowuje jego ograniczenia sterowania i fizyki w clean-roomowym kodzie, korzystając z dołączonego tła jungle.
+
 ## Linki i debug
 
 Parametr QR bezpośrednio wybiera gracza:

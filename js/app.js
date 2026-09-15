@@ -28,7 +28,9 @@ let state;
 let glitchTimer;
 let glitchBurstTimer;
 let collisionTimer;
+let fleetTurnTimer;
 let backgroundAudio;
+let activeScreenDisposer;
 
 function defaultState() { return { screen: "start", currentStage: 0, completedStages: [], digits: [], completed: false }; }
 function loadState() { try { return { ...defaultState(), ...JSON.parse(localStorage.getItem(storageKey) || "null") }; } catch { return defaultState(); } }
@@ -36,7 +38,7 @@ function saveState() { localStorage.setItem(storageKey, JSON.stringify(state)); 
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c])); }
 function animatedPlayerName(name) { return [...name].map((letter, index) => `<span class="logo-letter letter-${index + 1}">${escapeHtml(letter)}</span>`).join(""); }
 function glitchSlices() { return `<span class="glitch-field" aria-hidden="true"></span>`; }
-function render(markup, screenClass = "") { clearTimeout(glitchTimer); clearTimeout(glitchBurstTimer); clearTimeout(collisionTimer); clearInterval(glitchTimer); clearInterval(glitchBurstTimer); if (backgroundAudio) { backgroundAudio.pause(); backgroundAudio = null; } document.querySelectorAll(".glitch-canvas").forEach(canvas => canvas.remove()); app.innerHTML = `<section class="screen ${screenClass}">${markup}</section>`; }
+function render(markup, screenClass = "") { if (activeScreenDisposer) { try { activeScreenDisposer(); } catch (error) { console.warn("Nie udało się zatrzymać poprzedniego ekranu gry", error); } activeScreenDisposer = null; } clearTimeout(glitchTimer); clearTimeout(glitchBurstTimer); clearTimeout(collisionTimer); clearTimeout(fleetTurnTimer); clearInterval(glitchTimer); clearInterval(glitchBurstTimer); if (backgroundAudio) { backgroundAudio.pause(); backgroundAudio = null; } document.querySelectorAll(".glitch-canvas").forEach(canvas => canvas.remove()); app.innerHTML = `<section class="screen ${screenClass}">${markup}</section>`; }
 function startLogoGlitch() {
   const targets = [...document.querySelectorAll(".glitch-target")];
   if (!targets.length) return;
@@ -127,10 +129,8 @@ function showIntroAudio() {
   const audio = new Audio("./audio/wszystkowtemacie.mp3");
   audio.preload = "auto";
   backgroundAudio = audio;
-  let objectUrl = "";
   let finished = false;
-  const cleanup = () => { if (objectUrl) URL.revokeObjectURL(objectUrl); objectUrl = ""; };
-  const finish = () => { if (finished) return; finished = true; cleanup(); backgroundAudio = null; showStage(); };
+  const finish = () => { if (finished) return; finished = true; backgroundAudio = null; showStage(); };
   const fallback = () => { if (finished) return; finished = true; console.warn("Brak pliku audio lub nie można go odtworzyć: audio/wszystkowtemacie.mp3"); setTimeout(() => { backgroundAudio = null; showStage(); }, 1000); };
   audio.addEventListener("ended", finish, { once: true });
   audio.addEventListener("error", fallback, { once: true });
@@ -138,10 +138,8 @@ function showIntroAudio() {
   const startPlayback = () => { if (started) return; started = true; document.querySelector(".loading-glitch")?.remove(); audio.play().catch(fallback); };
   audio.addEventListener("canplay", startPlayback, { once: true });
   audio.addEventListener("canplaythrough", startPlayback, { once: true });
-  fetch("./audio/wszystkowtemacie.mp3", { cache: "no-store" })
-    .then(response => { if (!response.ok) throw new Error("audio request failed"); return response.blob(); })
-    .then(blob => { if (finished) return; objectUrl = URL.createObjectURL(blob); audio.src = objectUrl; audio.load(); })
-    .catch(fallback);
+  audio.src = "./audio/wszystkowtemacie.mp3";
+  audio.load();
 }
 function pinPreview() { return config.stages.map((_, i) => `<span class="pin-box ${state.digits[i] ? "digit-reveal" : "hidden"}">${state.digits[i] || "_"}</span>`).join(""); }
 function showJumpGame() {
@@ -177,7 +175,12 @@ function startJumpGame() {
     }
   };
   const jumpButton = document.querySelector("[data-game-action='jump']");
+  const skipButton = document.createElement("button");
+  skipButton.className = "button secondary game-skip-button";
+  skipButton.textContent = "POMIŃ GRĘ";
+  jumpButton.after(skipButton);
   jumpButton.addEventListener("click", jump);
+  skipButton.addEventListener("click", () => { running = false; finish(); const stage = config.stages[0]; state.digits[0] = stage.digit; state.completedStages = [...new Set([...state.completedStages, stage.id])]; state.currentStage = 1; saveState(); showGameDigit(stage.digit); });
   document.querySelector("[data-game-action='begin']").addEventListener("click", () => {
     running = true;
     lastTime = performance.now();
@@ -210,10 +213,7 @@ function startJumpGame() {
     state.completedStages = [...new Set([...state.completedStages, stage.id])];
     state.currentStage = 1;
     saveState();
-    document.querySelector("#game-feedback").textContent = "WERYFIKACJA ZAKOŃCZONA";
-    const button = document.querySelector("[data-game-action='jump']");
-    button.textContent = "DALEJ";
-    button.onclick = () => playAudio(stage.audio, false);
+    showGameDigit(stage.digit);
   };
   const win = () => {
     chasing = true;
@@ -279,10 +279,194 @@ function startJumpGame() {
     animationId = requestAnimationFrame(draw);
   };
 }
+function showGameDigit(digit) {
+  state.screen = "stage"; saveState();
+  render(`${header("PROTOKÓŁ 01 / 03")}<div class="content game-digit-content"><div class="eyebrow">KOD DO KŁÓDKI</div><h2>CYFRA ODSZYFROWANA</h2><div class="game-digit">${escapeHtml(digit)}</div><div class="fleet-status">PRZEJŚCIE DO KOLEJNEGO ETAPU</div></div>${footer()}${debugPanel()}`);
+  collisionTimer = setTimeout(showFleetTransition, 2400);
+}
+function showFleetTransition() {
+  state.screen = "fleet-transition"; saveState();
+  render(`${header("PROTOKÓŁ 02 / 03")}<div class="fleet-transition-screen" aria-label="Ekran przejściowy"><img class="captain-gotenhafen" src="./assets/images/kapitangotenhafen.gif" alt="Kapitan Gotenhafen"></div>${footer()}${debugPanel()}`, "fleet-transition");
+  const audio = new Audio("./audio/gotenhafen.mp3");
+  audio.preload = "auto";
+  backgroundAudio = audio;
+  let finished = false;
+  const finish = () => { if (finished) return; finished = true; backgroundAudio = null; showBattleshipGame(); };
+  const fallback = () => { if (finished) return; finished = true; backgroundAudio = null; setTimeout(showBattleshipGame, 1000); };
+  audio.addEventListener("ended", finish, { once: true });
+  audio.addEventListener("error", fallback, { once: true });
+  let started = false;
+  const startPlayback = () => { if (started) return; started = true; audio.play().catch(fallback); };
+  audio.addEventListener("canplay", startPlayback, { once: true });
+  audio.addEventListener("canplaythrough", startPlayback, { once: true });
+  audio.src = "./audio/gotenhafen.mp3";
+  audio.load();
+}
+function showBattleshipGame() {
+  state.screen = "stage"; saveState();
+  const makeGrid = (name, own = false) => Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = String.fromCharCode(65 + index % 8); const coordinate = `${column}${row + 1}`; const shipCells = new Set([0, 1, 2, 3, 20, 21, 22, 32, 33, 34, 53, 54]); return `<button class="fleet-cell${own && shipCells.has(index) ? " fleet-ship" : ""}" data-fleet-${name}="${index}" data-coordinate="${coordinate}" aria-label="${own ? "Twoje pole" : "Cel"} ${coordinate}" disabled></button>`; }).join("");
+  render(`${header("PROTOKÓŁ 02 / 03")}<div class="content fleet-content"><div class="fleet-panel"><div class="fleet-score" id="fleet-score">0 / 12</div><div class="fleet-card" id="fleet-card"><div class="fleet-card-inner" id="fleet-card-inner"><div class="fleet-card-face fleet-front"><div class="fleet-label">WODY PRZECIWNIKA <span>— NAMIERZANIE</span></div><div class="fleet-grid" id="enemy-grid">${makeGrid("enemy")}</div></div><div class="fleet-card-face fleet-back"><div class="fleet-label">TWOJA FLOTA <span>— STATUS</span></div><div class="fleet-grid" id="player-grid">${makeGrid("player", true)}</div></div></div></div><div class="fleet-status" id="fleet-status">NACIŚNIJ START, ABY ROZPOCZĄĆ</div><button class="button fleet-start" id="fleet-start">START BITWY</button><button class="button fleet-next" id="fleet-next" hidden>DALEJ</button></div></div>${footer()}${debugPanel()}`);
+  startBattleshipGame(); bindDebug();
+}
+function startBattleshipGame() {
+  const enemyGrid = document.querySelector("#enemy-grid");
+  const playerGrid = document.querySelector("#player-grid");
+  const startButton = document.querySelector("#fleet-start");
+  const nextButton = document.querySelector("#fleet-next");
+  const skipButton = document.createElement("button");
+  skipButton.className = "button secondary game-skip-button";
+  skipButton.textContent = "POMIŃ GRĘ";
+  startButton.after(skipButton);
+  const status = document.querySelector("#fleet-status");
+  const score = document.querySelector("#fleet-score");
+  const fleetCard = document.querySelector("#fleet-card-inner");
+  const hitAudioGood = new Audio("./audio/jest%20dobrze.mp3");
+  const hitAudioNo = new Audio("./audio/No.mp3");
+  const hitAudioUss = new Audio("./audio/uss%20zmuda.mp3");
+  const hitAudioOJeny = new Audio("./audio/o%20jeny.mp3");
+  const hitAudioHahaha = new Audio("./audio/hahaha.mp3");
+  const hitAudioFinal = new Audio("./audio/Tykurwo.mp3");
+  const hitAudios = [hitAudioGood, hitAudioNo, hitAudioUss, hitAudioOJeny, hitAudioHahaha];
+  hitAudios.forEach(audio => { audio.preload = "auto"; audio.load(); });
+  hitAudioFinal.preload = "auto";
+  hitAudioFinal.load();
+  let hitCommentIndex = 0;
+  const enemyFleet = new Set([0, 1, 2, 3, 20, 21, 22, 32, 33, 34, 53, 54]);
+  let playerFleet = new Set([0, 1, 2, 3, 20, 21, 22, 32, 33, 34, 53, 54]);
+  const enemyShots = [32, 24, 33, 40, 16, 8, 34, 48, 12, 60];
+  let hits = 0;
+  let enemyTurn = 0;
+  let started = false;
+  let finished = false;
+  let playerTurn = false;
+  skipButton.addEventListener("click", () => { finished = true; playerTurn = false; clearTimeout(fleetTurnTimer); state.digits[1] = config.stages[1].digit; state.completedStages = [...new Set([...state.completedStages, config.stages[1].id])]; state.currentStage = 2; saveState(); showStage(); });
+  const enemyCells = [...enemyGrid.querySelectorAll("[data-fleet-enemy]")];
+  const playerCells = [...playerGrid.querySelectorAll("[data-fleet-player]")];
+  const setStatus = message => { status.textContent = message; };
+  const endGame = () => {
+    finished = true;
+    playerTurn = false;
+    enemyCells.forEach(cell => { cell.disabled = true; });
+    state.digits[1] = config.stages[1].digit;
+    state.completedStages = [...new Set([...state.completedStages, config.stages[1].id])];
+    state.currentStage = 2;
+    saveState();
+    setStatus("FLOTA PRZECIWNIKA ZNISZCZONA");
+    nextButton.hidden = false;
+    nextButton.addEventListener("click", () => playAudio(config.stages[1].audio, false), { once: true });
+  };
+  const enemyAttack = () => {
+    if (enemyTurn >= enemyShots.length) { playerTurn = true; setStatus("TWOJA TURA — NAMIERZ OKRĘT"); return; }
+    const target = enemyShots[enemyTurn++];
+    const playerCell = playerCells[target];
+    if (!playerCell) { playerTurn = true; setStatus("TWOJA TURA — NAMIERZ OKRĘT"); return; }
+    playerCell.classList.add(playerFleet.has(target) ? "fleet-hit-player" : "fleet-miss-player");
+    if (target === 26) setStatus("FLOTA USZKODZONA — TWOJA TURA");
+    else if (playerFleet.has(target)) setStatus("TRAFIENIE. TWOJA TURA.");
+    else setStatus("PRZECIWNIK SPUDŁOWAŁ. TWOJA TURA.");
+    playerTurn = true;
+  };
+  const beginComputerTurn = () => {
+    setStatus("KARTA OBRACA SIĘ — KOMPUTER MYŚLI...");
+    fleetTurnTimer = setTimeout(() => fleetCard.classList.add("is-player"), 900);
+    fleetTurnTimer = setTimeout(() => {
+      enemyAttack();
+      setStatus("KOMPUTER ODDAŁ STRZAŁ — KARTA WRACA");
+      fleetTurnTimer = setTimeout(() => fleetCard.classList.remove("is-player"), 850);
+    }, 3200);
+  };
+  const fire = event => {
+    const cell = event.currentTarget;
+    if (!started || finished || !playerTurn || cell.classList.contains("fleet-hit") || cell.classList.contains("fleet-miss")) return;
+    const target = Number(cell.dataset.fleetEnemy);
+    playerTurn = false;
+    if (enemyFleet.has(target)) {
+      cell.classList.add("fleet-hit");
+      hits += 1;
+      score.textContent = `${hits} / 12`;
+      const hitAudio = hits === 12 ? hitAudioFinal : hitAudios[hitCommentIndex++ % hitAudios.length];
+      hitAudio.currentTime = 0;
+      if (hits === 12) { hitAudio.play().catch(() => {}); return endGame(); }
+      setStatus("TRAFIENIE. PRZECIWNIK ODPOWIADA...");
+      let audioFinished = false;
+      const continueAfterAudio = () => { if (audioFinished) return; audioFinished = true; beginComputerTurn(); };
+      hitAudio.addEventListener("ended", continueAfterAudio, { once: true });
+      hitAudio.play().catch(continueAfterAudio);
+      fleetTurnTimer = setTimeout(continueAfterAudio, 8000);
+      return;
+    } else {
+      cell.classList.add("fleet-miss");
+      setStatus("PUDŁO. PRZECIWNIK ODPOWIADA...");
+    }
+    fleetTurnTimer = setTimeout(beginComputerTurn, 900);
+  };
+  enemyCells.forEach(cell => cell.addEventListener("click", fire));
+  startButton.addEventListener("click", () => {
+    started = true;
+    startButton.hidden = true;
+    enemyCells.forEach(cell => { cell.disabled = false; });
+    playerTurn = true;
+    setStatus("TWOJA TURA — NAMIERZ OKRĘT");
+  });
+}
+function showContraGame() {
+  state.screen = "stage"; saveState();
+  render(`${header("PROTOKOL 03 / 03")}<div class="content contra-content"><div class="contra-panel"><div class="contra-viewport"><canvas id="contra-game" tabindex="0" aria-label="Gra zręcznościowa w stylu Contra"></canvas></div><div class="contra-status" id="contra-status">NACISNIJ START, ABY ROZPOCZAC</div><div class="contra-keyboard">← → RUCH · ↑ ↓ CELOWANIE · Z STRZAL · X / SPACJA SKOK · P PAUZA</div><button class="button contra-start" id="contra-start">START GRY</button><div class="contra-controls" aria-label="Sterowanie grą"><div class="contra-pad"><button class="button secondary" data-contra-control="up" aria-label="Celuj w górę">▲</button><button class="button secondary" data-contra-control="left" aria-label="Ruch w lewo">◀</button><button class="button secondary" data-contra-control="down" aria-label="Celuj w dół">▼</button><button class="button secondary" data-contra-control="right" aria-label="Ruch w prawo">▶</button></div><div class="contra-actions"><button class="button secondary" data-contra-control="jump">A<br><small>SKOK</small></button><button class="button secondary" data-contra-control="fire">B<br><small>STRZAL</small></button></div></div></div></div>${footer()}${debugPanel()}`, "contra-screen");
+  startContraGame(); bindDebug();
+}
+function startContraGame() {
+  if (typeof window.mountContraGame === "function") {
+    activeScreenDisposer = window.mountContraGame({
+      canvas: document.querySelector("#contra-game"),
+      startButton: document.querySelector("#contra-start"),
+      status: document.querySelector("#contra-status"),
+      controlButtons: [...document.querySelectorAll("[data-contra-control]")],
+      onClear: () => {
+        const stage = config.stages[2];
+        state.digits[2] = stage.digit;
+        state.completedStages = [...new Set([...state.completedStages, stage.id])];
+        state.currentStage = 3;
+        saveState();
+        showDigit();
+      }
+    });
+    return;
+  }
+  const canvas = document.querySelector("#contra-game"); const ctx = canvas.getContext("2d");
+  const start = document.querySelector("#contra-start"); const status = document.querySelector("#contra-status");
+  const scoreText = document.querySelector("#contra-score"); const livesText = document.querySelector("#contra-lives");
+  const keys = new Set(); const bullets = []; const enemies = []; let raf = 0; let running = false; let won = false; let score = 0; let lives = 3; let last = 0; let spawn = 0; let shot = 0; let scroll = 0;
+  const player = { x: 118, y: 195, w: 42, h: 72, vy: 0, grounded: false, dir: 1 };
+  const platforms = [{ x: 0, y: 267, w: 180, h: 14 }, { x: 260, y: 320, w: 176, h: 14 }, { x: 425, y: 373, w: 116, h: 14 }, { x: 608, y: 354, w: 140, h: 14 }, { x: 740, y: 383, w: 120, h: 14 }, { x: 812, y: 355, w: 148, h: 14 }];
+  const backdrop = new Image();
+  backdrop.src = "./assets/images/contra-jungle-stage.png";
+  const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  const drawRect = (x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
+  const draw = () => {
+    if (backdrop.complete && backdrop.naturalWidth) ctx.drawImage(backdrop, 0, 0, canvas.width, canvas.height);
+    else { ctx.fillStyle = "#071014"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    ctx.fillStyle = "#00000022"; ctx.fillRect(0, 0, canvas.width, 74);
+    bullets.forEach(b => { drawRect(b.x, b.y, 15, 4, "#ffe267"); drawRect(b.x - b.v / 90, b.y + 1, 8, 2, "#ff704f"); });
+    enemies.forEach(e => { drawRect(e.x + 10, e.y + 5, 17, 16, "#f3c88e"); drawRect(e.x + 8, e.y + 21, 23, 22, "#a93442"); drawRect(e.x + 3, e.y + 42, 11, 10, "#314d77"); drawRect(e.x + 24, e.y + 42, 11, 10, "#314d77"); drawRect(e.x - 11, e.y + 27, 23, 5, "#d6d4b6"); drawRect(e.x - 18, e.y + 28, 8, 3, "#ffdb5e"); });
+    drawRect(player.x + 12, player.y, 18, 15, "#edc692"); drawRect(player.x + 8, player.y + 15, 26, 26, "#d7a86e"); drawRect(player.x + 6, player.y + 41, 12, 28, "#3f5db8"); drawRect(player.x + 24, player.y + 41, 12, 28, "#3f5db8"); drawRect(player.x + 3, player.y + 65, 17, 7, "#151c36"); drawRect(player.x + 23, player.y + 65, 17, 7, "#151c36"); drawRect(player.x + 29, player.y + 22, 31, 6, "#d8ded5"); drawRect(player.x + 59, player.y + 23, 11, 4, "#ffe36a"); drawRect(player.x + 8, player.y + 8, 26, 3, "#e34b52");
+  };
+  const jump = () => { if (running && player.grounded) { player.vy = -455; player.grounded = false; } };
+  const fire = () => { if (running && shot <= 0) { bullets.push({ x: player.x + (player.dir > 0 ? 28 : -12), y: player.y + 21, v: player.dir * 650, w: 15, h: 4 }); shot = .18; } };
+  const keyDown = e => { if (["ArrowUp", "Space"].includes(e.code)) e.preventDefault(); keys.add(e.code); if (e.code === "ArrowUp" || e.code === "Space") jump(); if (e.code === "KeyZ" || e.code === "KeyX") fire(); };
+  const keyUp = e => keys.delete(e.code); window.addEventListener("keydown", keyDown); window.addEventListener("keyup", keyUp);
+  document.querySelectorAll("[data-contra]").forEach(button => { const action = button.dataset.contra; button.addEventListener("pointerdown", e => { e.preventDefault(); if (action === "jump") jump(); if (action === "fire") fire(); }); });
+  const reset = () => { score = 0; lives = 3; scroll = 0; spawn = 0; shot = 0; bullets.length = 0; enemies.length = 0; player.x = 118; player.y = 195; player.vy = 0; scoreText.textContent = "000000"; livesText.textContent = "03"; };
+  const finish = () => { if (won) return; won = true; running = false; cancelAnimationFrame(raf); window.removeEventListener("keydown", keyDown); window.removeEventListener("keyup", keyUp); state.digits[2] = config.stages[2].digit; state.completedStages = [...new Set([...state.completedStages, config.stages[2].id])]; state.currentStage = 3; saveState(); status.textContent = "SEKTOR OCZYSZCZONY"; start.hidden = false; start.textContent = "DALEJ"; start.onclick = showDigit; };
+  const loop = now => { if (!running) return; const dt = Math.min(.034, (now - last) / 1000 || .016); last = now; scroll += 120 * dt; spawn -= dt; shot -= dt; player.vy += 1050 * dt; player.y += player.vy * dt; player.grounded = false; platforms.forEach(p => { if (player.vy >= 0 && player.x + player.w > p.x && player.x < p.x + p.w && player.y + player.h >= p.y && player.y + player.h <= p.y + p.h + 18) { player.y = p.y - player.h; player.vy = 0; player.grounded = true; } }); if (spawn <= 0 && enemies.length < 5) { const p = platforms[1 + Math.floor(Math.random() * (platforms.length - 1))]; enemies.push({ x: 970, y: p.y - 52, w: 38, h: 52, speed: 105 + score * 12 }); spawn = Math.max(.65, 1.5 - score * .05); } bullets.forEach(b => b.x += b.v * dt); for (let i = bullets.length - 1; i >= 0; i--) if (bullets[i].x < -40 || bullets[i].x > 1000) bullets.splice(i, 1); enemies.forEach(e => e.x -= e.speed * dt); for (let i = enemies.length - 1; i >= 0; i--) if (enemies[i].x < -60) enemies.splice(i, 1); for (let i = enemies.length - 1; i >= 0; i--) { for (let j = bullets.length - 1; j >= 0; j--) if (hit(bullets[j], enemies[i])) { enemies.splice(i, 1); bullets.splice(j, 1); score++; scoreText.textContent = String(score * 1250).padStart(6, "0"); break; } } if (enemies.some(e => hit(player, e))) { lives--; livesText.textContent = String(Math.max(0, lives)).padStart(2, "0"); if (lives <= 0) { running = false; status.textContent = "KONIEC MISJI"; start.hidden = false; start.textContent = "SPROBUJ PONOWNIE"; start.onclick = () => { reset(); start.hidden = true; running = true; last = performance.now(); raf = requestAnimationFrame(loop); }; } } if (score >= 8) finish(); draw(); if (running) raf = requestAnimationFrame(loop); };
+  backdrop.addEventListener("load", draw, { once: true });
+  start.addEventListener("click", () => { reset(); running = true; start.hidden = true; status.textContent = "BIEGNIJ, STRZELAJ I PRZETRWAJ"; last = performance.now(); raf = requestAnimationFrame(loop); }, { once: true }); draw();
+}
 function showStage() {
   const index = state.currentStage; const stage = config.stages[index];
   if (!stage) return showFinalAudio();
   if (index === 0) return showJumpGame();
+  if (index === 1) return showBattleshipGame();
+  if (index === 2) return showContraGame();
   state.screen = "stage"; saveState();
   render(`${header(`PROTOKÓŁ ${String(index + 1).padStart(2, "0")} / 03`)}<div class="content"><div class="progress-wrap"><div class="progress-label"><span>POSTĘP PROCEDURY</span><span>${index + 1} / ${config.stages.length}</span></div><div class="progress-track"><div class="progress-bar" style="width:${(index / config.stages.length) * 100}%"></div></div></div><div class="stage-kicker">${escapeHtml(stage.title)}</div><div class="puzzle-panel" id="puzzle-panel"><h2>Weryfikacja danych</h2><p class="puzzle-text">${escapeHtml(stage.puzzleText)}</p><form class="answer-form" id="answer-form"><label class="label" for="answer">ODPOWIEDŹ</label><input class="answer-input" id="answer" name="answer" autocomplete="off" autocapitalize="none" spellcheck="false" required><button class="button" type="submit">SPRAWDŹ</button><div class="feedback" id="feedback" role="status"></div></form></div><div class="pin-title">PIN</div><div class="pin-row">${pinPreview()}</div></div>${footer()}${debugPanel()}`);
   document.querySelector("#answer-form").addEventListener("submit", e => checkAnswer(e, stage));
@@ -317,4 +501,4 @@ function showComplete() { render(`${header("ACCESS GRANTED")}<div class="content
 function bindDebug() { document.querySelectorAll("[data-action]").forEach(b => b.addEventListener("click", () => b.dataset.action === "start" ? showIntroAudio() : b.dataset.action === "briefing" ? showStage() : b.dataset.action === "home" ? (state = defaultState(), saveState(), showStart()) : b.dataset.action === "next" ? (state.currentStage >= config.stages.length ? showFinalAudio() : showStage()) : null)); document.querySelectorAll("[data-debug]").forEach(b => b.addEventListener("click", () => { const action = b.dataset.debug; if (action === "reset" || action === "clear") { localStorage.removeItem(storageKey); state = defaultState(); showStart(); } else if (action === "skip" && state.currentStage < config.stages.length) { state.digits[state.currentStage] = config.stages[state.currentStage].digit; state.completedStages = [...new Set([...state.completedStages, config.stages[state.currentStage].id])]; state.currentStage = Math.min(state.currentStage + 1, config.stages.length); saveState(); showStage(); } else if (action === "final") { state.currentStage = config.stages.length; saveState(); showFinalAudio(); } })); document.querySelectorAll("[data-stage]").forEach(b => b.addEventListener("click", () => { state.currentStage = Number(b.dataset.stage); state.screen = "stage"; saveState(); showStage(); })); }
 
 if (!config) showInvalid();
-else { state = loadState(); if (state.completed) showComplete(); else if (state.screen === "stage") showStage(); else if (state.screen === "briefing") showStage(); else if (state.screen === "intro-audio") showIntroAudio(); else if (state.screen === "final-audio") showFinalAudio(); else if (state.currentStage > 0) showDigit(); else showStart(); }
+else { state = loadState(); if (state.completed) showComplete(); else if (state.screen === "stage") showStage(); else if (state.screen === "briefing") showStage(); else if (state.screen === "intro-audio") showIntroAudio(); else if (state.screen === "fleet-transition") showFleetTransition(); else if (state.screen === "final-audio") showFinalAudio(); else if (state.currentStage > 0) showDigit(); else showStart(); }
