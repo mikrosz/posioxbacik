@@ -27,6 +27,7 @@ const storageKey = `security_game_${playerId}`;
 let state;
 let glitchTimer;
 let glitchBurstTimer;
+let collisionTimer;
 let backgroundAudio;
 
 function defaultState() { return { screen: "start", currentStage: 0, completedStages: [], digits: [], completed: false }; }
@@ -35,7 +36,7 @@ function saveState() { localStorage.setItem(storageKey, JSON.stringify(state)); 
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c])); }
 function animatedPlayerName(name) { return [...name].map((letter, index) => `<span class="logo-letter letter-${index + 1}">${escapeHtml(letter)}</span>`).join(""); }
 function glitchSlices() { return `<span class="glitch-field" aria-hidden="true"></span>`; }
-function render(markup, screenClass = "") { clearTimeout(glitchTimer); clearTimeout(glitchBurstTimer); clearInterval(glitchTimer); clearInterval(glitchBurstTimer); if (backgroundAudio) { backgroundAudio.pause(); backgroundAudio = null; } document.querySelectorAll(".glitch-canvas").forEach(canvas => canvas.remove()); app.innerHTML = `<section class="screen ${screenClass}">${markup}</section>`; }
+function render(markup, screenClass = "") { clearTimeout(glitchTimer); clearTimeout(glitchBurstTimer); clearTimeout(collisionTimer); clearInterval(glitchTimer); clearInterval(glitchBurstTimer); if (backgroundAudio) { backgroundAudio.pause(); backgroundAudio = null; } document.querySelectorAll(".glitch-canvas").forEach(canvas => canvas.remove()); app.innerHTML = `<section class="screen ${screenClass}">${markup}</section>`; }
 function startLogoGlitch() {
   const targets = [...document.querySelectorAll(".glitch-target")];
   if (!targets.length) return;
@@ -126,30 +127,157 @@ function showIntroAudio() {
   const audio = new Audio("./audio/wszystkowtemacie.mp3");
   audio.preload = "auto";
   backgroundAudio = audio;
+  let objectUrl = "";
   let finished = false;
-  const finish = () => { if (finished) return; finished = true; backgroundAudio = null; showStage(); };
+  const cleanup = () => { if (objectUrl) URL.revokeObjectURL(objectUrl); objectUrl = ""; };
+  const finish = () => { if (finished) return; finished = true; cleanup(); backgroundAudio = null; showStage(); };
   const fallback = () => { if (finished) return; finished = true; console.warn("Brak pliku audio lub nie można go odtworzyć: audio/wszystkowtemacie.mp3"); setTimeout(() => { backgroundAudio = null; showStage(); }, 1000); };
   audio.addEventListener("ended", finish, { once: true });
   audio.addEventListener("error", fallback, { once: true });
-  audio.addEventListener("canplaythrough", () => { document.querySelector(".loading-glitch")?.remove(); audio.play().catch(fallback); }, { once: true });
-  audio.load();
+  let started = false;
+  const startPlayback = () => { if (started) return; started = true; document.querySelector(".loading-glitch")?.remove(); audio.play().catch(fallback); };
+  audio.addEventListener("canplay", startPlayback, { once: true });
+  audio.addEventListener("canplaythrough", startPlayback, { once: true });
+  fetch("./audio/wszystkowtemacie.mp3", { cache: "no-store" })
+    .then(response => { if (!response.ok) throw new Error("audio request failed"); return response.blob(); })
+    .then(blob => { if (finished) return; objectUrl = URL.createObjectURL(blob); audio.src = objectUrl; audio.load(); })
+    .catch(fallback);
 }
 function pinPreview() { return config.stages.map((_, i) => `<span class="pin-box ${state.digits[i] ? "digit-reveal" : "hidden"}">${state.digits[i] || "_"}</span>`).join(""); }
 function showJumpGame() {
   state.screen = "stage"; saveState();
-  render(`${header("PROTOKÓŁ 01 / 03")}<div class="content game-content"><div class="game-panel"><span class="game-score" id="game-score">0 / 8</span><canvas id="jump-game" width="900" height="560" aria-label="Gra zręcznościowa — przeskakiwanie przez płotki"></canvas><button class="button jump-button" data-game-action="jump">SKOK</button><div class="game-feedback" id="game-feedback" role="status"></div></div></div>${footer()}${debugPanel()}`);
+  render(`${header("PROTOKÓŁ 01 / 03")}<div class="content game-content"><div class="game-panel"><span class="game-score" id="game-score">0 / 8</span><canvas id="jump-game" width="900" height="560" aria-label="Gra zręcznościowa — przeskakiwanie przez płotki"></canvas><img class="collision-gif" id="collision-gif" src="./assets/images/zderzenie.gif" alt="" hidden><button class="button game-start-button" data-game-action="begin">START GRY</button><button class="button jump-button" data-game-action="jump" disabled>SKOK</button><div class="game-feedback" id="game-feedback" role="status"></div></div></div>${footer()}${debugPanel()}`);
   startJumpGame(); bindDebug();
 }
 function startJumpGame() {
-  const canvas = document.querySelector("#jump-game"); const context = canvas.getContext("2d"); const playerImage = new Image(); playerImage.src = "./assets/images/gra%20zmuda.png";
-  const player = { x: 62, y: 0, width: 230, height: 290, velocity: 0, jumping: false }; let obstacles = []; let score = 0; let elapsed = 0; let lastTime = performance.now(); let running = true; let animationId;
-  const ground = 475; const jump = () => { if (running && !player.jumping) { player.velocity = -900; player.jumping = true; } };
-  document.querySelector("[data-game-action='jump']").addEventListener("click", jump);
-  const keyHandler = event => { if (event.code === "Space") { event.preventDefault(); jump(); } }; window.addEventListener("keydown", keyHandler);
-  const finish = () => { window.removeEventListener("keydown", keyHandler); cancelAnimationFrame(animationId); };
-  const fail = () => { running = false; finish(); const feedback = document.querySelector("#game-feedback"); feedback.textContent = "KOLIZJA — SPRÓBUJ PONOWNIE"; feedback.classList.add("game-fail"); const button = document.querySelector("[data-game-action='jump']"); button.textContent = "SPRÓBUJ PONOWNIE"; button.onclick = () => showJumpGame(); };
-  const win = () => { running = false; finish(); const stage = config.stages[0]; state.digits[0] = stage.digit; state.completedStages = [...new Set([...state.completedStages, stage.id])]; state.currentStage = 1; saveState(); document.querySelector("#game-feedback").textContent = "WERYFIKACJA ZAKOŃCZONA"; const button = document.querySelector("[data-game-action='jump']"); button.textContent = "DALEJ"; button.onclick = () => playAudio(stage.audio, false); };
-  const draw = time => { if (!running) return; const delta = Math.min((time - lastTime) / 1000, .04); lastTime = time; elapsed += delta; player.velocity += 1800 * delta; player.y += player.velocity * delta; if (player.y >= 0) { player.y = 0; player.velocity = 0; player.jumping = false; } if (elapsed > 1.05 && (!obstacles.length || obstacles[obstacles.length - 1].x < 560)) obstacles.push({ x: canvas.width + 20, width: 24, height: 63 }); obstacles.forEach(obstacle => { obstacle.x -= (290 + Math.min(score, 5) * 12) * delta; }); obstacles = obstacles.filter(obstacle => obstacle.x > -60); const hitbox = { x: player.x + 46, y: ground - player.height + player.y + 28, width: 112, height: player.height - 38 }; for (const obstacle of obstacles) { const obstacleBox = { x: obstacle.x, y: ground - obstacle.height, width: obstacle.width, height: obstacle.height }; if (hitbox.x < obstacleBox.x + obstacleBox.width && hitbox.x + hitbox.width > obstacleBox.x && hitbox.y < obstacleBox.y + obstacleBox.height && hitbox.y + hitbox.height > obstacleBox.y) return fail(); } if (obstacles.some(obstacle => !obstacle.counted && obstacle.x + obstacle.width < player.x)) { obstacles.filter(obstacle => !obstacle.counted && obstacle.x + obstacle.width < player.x).forEach(obstacle => { obstacle.counted = true; score += 1; }); document.querySelector("#game-score").textContent = `${score} / 8`; if (score >= 8) return win(); } context.clearRect(0, 0, canvas.width, canvas.height); context.fillStyle = "#050505"; context.fillRect(0, 0, canvas.width, canvas.height); context.strokeStyle = "#8b5cf655"; context.lineWidth = 2; context.beginPath(); context.moveTo(0, ground + 1); context.lineTo(canvas.width, ground + 1); context.stroke(); if (playerImage.complete) context.drawImage(playerImage, player.x, ground - player.height + player.y, player.width, player.height); context.fillStyle = "#8b5cf6"; obstacles.forEach(obstacle => { context.fillRect(obstacle.x, ground - obstacle.height, obstacle.width, obstacle.height); context.fillRect(obstacle.x - 8, ground - obstacle.height, obstacle.width + 16, 7); }); animationId = requestAnimationFrame(draw); }; requestAnimationFrame(draw);
+  const canvas = document.querySelector("#jump-game");
+  const context = canvas.getContext("2d");
+  const playerImage = new Image();
+  const runnerImage = new Image();
+  const gameAudio = new Audio("./audio/zesraciesi%C4%99zestrachu.mp3");
+  gameAudio.preload = "auto";
+  gameAudio.loop = false;
+  gameAudio.load();
+  playerImage.src = "./assets/images/gra%20zmuda.png";
+  runnerImage.src = "./assets/images/chlopieczestrzelnicy.png";
+  const player = { x: 62, y: 0, width: 360, height: 450, velocity: 0, jumping: false };
+  const runner = { x: 345, y: 0, width: 270, height: 360, velocity: 0, jumping: false };
+  let obstacles = [];
+  let score = 0;
+  let elapsed = 0;
+  let lastTime = performance.now();
+  let running = false;
+  let chasing = false;
+  let animationId;
+  const ground = 475;
+  const jump = () => {
+    if (running && !chasing && !player.jumping) {
+      player.velocity = -1000;
+      player.jumping = true;
+    }
+  };
+  const jumpButton = document.querySelector("[data-game-action='jump']");
+  jumpButton.addEventListener("click", jump);
+  document.querySelector("[data-game-action='begin']").addEventListener("click", () => {
+    running = true;
+    lastTime = performance.now();
+    document.querySelector("[data-game-action='begin']").hidden = true;
+    jumpButton.disabled = false;
+    gameAudio.currentTime = 0;
+    gameAudio.play().catch(() => {});
+    animationId = requestAnimationFrame(draw);
+  });
+  const keyHandler = event => {
+    if (event.code === "Space") { event.preventDefault(); jump(); }
+  };
+  window.addEventListener("keydown", keyHandler);
+  const finish = () => { window.removeEventListener("keydown", keyHandler); cancelAnimationFrame(animationId); gameAudio.pause(); gameAudio.currentTime = 0; };
+  const fail = () => {
+    running = false;
+    finish();
+    const feedback = document.querySelector("#game-feedback");
+    feedback.textContent = "KOLIZJA — SPRÓBUJ PONOWNIE";
+    feedback.classList.add("game-fail");
+    const button = document.querySelector("[data-game-action='jump']");
+    button.textContent = "SPRÓBUJ PONOWNIE";
+    button.onclick = () => showJumpGame();
+  };
+  const completeWin = () => {
+    running = false;
+    finish();
+    const stage = config.stages[0];
+    state.digits[0] = stage.digit;
+    state.completedStages = [...new Set([...state.completedStages, stage.id])];
+    state.currentStage = 1;
+    saveState();
+    document.querySelector("#game-feedback").textContent = "WERYFIKACJA ZAKOŃCZONA";
+    const button = document.querySelector("[data-game-action='jump']");
+    button.textContent = "DALEJ";
+    button.onclick = () => playAudio(stage.audio, false);
+  };
+  const win = () => {
+    chasing = true;
+    running = true;
+    obstacles = [];
+    jumpButton.disabled = true;
+    collisionTimer = setTimeout(() => {
+      chasing = false;
+      running = false;
+      finish();
+      const collisionGif = document.querySelector("#collision-gif");
+      collisionGif.hidden = false;
+      collisionTimer = setTimeout(completeWin, 2800);
+    }, 700);
+    animationId = requestAnimationFrame(draw);
+  };
+  const draw = time => {
+    if (!running) return;
+    const delta = Math.min((time - lastTime) / 1000, .04);
+    lastTime = time;
+    elapsed += delta;
+    if (chasing) player.x = Math.min(player.x + 420 * delta, runner.x - 60);
+    player.velocity += 1600 * delta;
+    player.y += player.velocity * delta;
+    if (player.y >= 0) { player.y = 0; player.velocity = 0; player.jumping = false; }
+    if (elapsed > 1.05 && (!obstacles.length || obstacles[obstacles.length - 1].x < 380)) obstacles.push({ x: canvas.width + 20, width: 24, height: 63 });
+    const gameSpeed = 220 + Math.min(score, 7) * 32;
+    obstacles.forEach(obstacle => { obstacle.x -= gameSpeed * delta; });
+    obstacles = obstacles.filter(obstacle => obstacle.x > -60);
+
+    const nextObstacle = obstacles.find(obstacle => obstacle.x > runner.x && obstacle.x - runner.x < 155);
+    if (nextObstacle && !runner.jumping) { runner.velocity = -820; runner.jumping = true; }
+    runner.velocity += 1600 * delta;
+    runner.y += runner.velocity * delta;
+    if (runner.y >= 0) { runner.y = 0; runner.velocity = 0; runner.jumping = false; }
+
+    const hitbox = { x: player.x + 105, y: ground - player.height + player.y + 250, width: 105, height: 145 };
+    for (const obstacle of obstacles) {
+      const obstacleBox = { x: obstacle.x, y: ground - obstacle.height, width: obstacle.width, height: obstacle.height };
+      if (hitbox.x < obstacleBox.x + obstacleBox.width && hitbox.x + hitbox.width > obstacleBox.x && hitbox.y < obstacleBox.y + obstacleBox.height && hitbox.y + hitbox.height > obstacleBox.y) return fail();
+    }
+    if (obstacles.some(obstacle => !obstacle.counted && obstacle.x + obstacle.width < player.x)) {
+      obstacles.filter(obstacle => !obstacle.counted && obstacle.x + obstacle.width < player.x).forEach(obstacle => { obstacle.counted = true; score += 1; });
+      document.querySelector("#game-score").textContent = `${score} / 8`;
+      if (score >= 8) return win();
+    }
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#050505";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = "#8b5cf655";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(0, ground + 1);
+    context.lineTo(canvas.width, ground + 1);
+    context.stroke();
+    if (runnerImage.complete) context.drawImage(runnerImage, runner.x, ground - runner.height + runner.y + 120, runner.width, runner.height);
+    if (playerImage.complete) context.drawImage(playerImage, player.x, ground - player.height + player.y + 165, player.width, player.height);
+    context.fillStyle = "#8b5cf6";
+    obstacles.forEach(obstacle => {
+      context.fillRect(obstacle.x, ground - obstacle.height, obstacle.width, obstacle.height);
+      context.fillRect(obstacle.x - 8, ground - obstacle.height, obstacle.width + 16, 7);
+    });
+    animationId = requestAnimationFrame(draw);
+  };
 }
 function showStage() {
   const index = state.currentStage; const stage = config.stages[index];
@@ -171,12 +299,16 @@ function playAudio(path, isFinal, onComplete = null, customLabel = "") {
   const transmissionLabel = customLabel || (isFinal ? "TRANSMISJA KOŃCOWA" : "TRANSMISJA PRZYCHODZĄCA");
   const finish = () => onComplete ? onComplete() : audioFinished(isFinal);
   render(`${header(transmissionLabel)}<div class="content"><div class="audio-panel" id="audio-panel"><div class="eyebrow">${transmissionLabel}</div><div class="audio-state">▶ ODTWARZANIE WIADOMOŚCI</div><div class="audio-meta"><span id="audio-current">00:00</span><span id="audio-duration">--:--</span></div><div class="audio-track"><div class="audio-progress" id="audio-progress"></div></div><div class="feedback" id="audio-feedback"></div><audio id="game-audio" preload="metadata"></audio></div></div>${footer()}${debugPanel()}`);
-  const audio = document.querySelector("#game-audio"); let finished = false;
+  const audio = document.querySelector("#game-audio"); audio.preload = "auto"; let finished = false;
   const fallback = () => { if (finished) return; finished = true; console.warn(`Brak pliku audio lub nie można go odtworzyć: ${path}`); document.querySelector("#audio-feedback").innerHTML = "[ BRAK PLIKU AUDIO — TRYB TESTOWY ]"; setTimeout(finish, 1000); };
   audio.addEventListener("error", fallback, { once: true }); audio.addEventListener("ended", () => { if (!finished) { finished = true; finish(); } });
   audio.addEventListener("loadedmetadata", () => { document.querySelector("#audio-duration").textContent = formatTime(audio.duration); });
   audio.addEventListener("timeupdate", () => { document.querySelector("#audio-current").textContent = formatTime(audio.currentTime); document.querySelector("#audio-progress").style.width = `${audio.duration ? audio.currentTime / audio.duration * 100 : 0}%`; });
-  audio.src = `./${path}`; audio.play().catch(fallback); bindDebug();
+  let started = false;
+  const startPlayback = () => { if (started) return; started = true; audio.play().catch(fallback); };
+  audio.addEventListener("canplay", startPlayback, { once: true });
+  audio.addEventListener("canplaythrough", startPlayback, { once: true });
+  audio.src = `./${path}`; audio.load(); bindDebug();
 }
 function audioFinished(isFinal) { if (isFinal) { state.completed = true; state.screen = "complete"; saveState(); showComplete(); } else { state.currentStage += 1; saveState(); showDigit(); } }
 function showDigit() { render(`${header()}<div class="content"><span class="eyebrow">WERYFIKACJA ZAKOŃCZONA</span><h2>CYFRA ODSZYFROWANA</h2><div class="pin-title" style="margin-top:32px">PIN</div><div class="pin-row">${pinPreview()}</div><div class="actions"><button class="button" data-action="next">DALEJ</button></div></div>${footer()}${debugPanel()}`); bindDebug(); }
