@@ -1,11 +1,11 @@
 /* GAME CONFIG — tutaj podmieniaj treści, odpowiedzi, cyfry, PIN-y i ścieżki audio. */
 const GAME_CONFIG = {
   posio: {
-    playerName: "POSIO", gameTitle: "SECURITY PROTOCOL", finalPin: "738",
+    playerName: "POSIO", gameTitle: "SECURITY PROTOCOL", finalPin: "420",
     stages: [
-      { id: 1, title: "PROTOKÓŁ 01", puzzleText: "PLACEHOLDER — tutaj znajdzie się zagadka POSIO nr 1.", answer: "test1", digit: "7", audio: "audio/posio_01.mp3" },
-      { id: 2, title: "PROTOKÓŁ 02", puzzleText: "PLACEHOLDER — tutaj znajdzie się zagadka POSIO nr 2.", answer: "test2", digit: "3", audio: "audio/posio_02.mp3" },
-      { id: 3, title: "PROTOKÓŁ 03", puzzleText: "PLACEHOLDER — tutaj znajdzie się zagadka POSIO nr 3.", answer: "test3", digit: "8", audio: "audio/posio_03.mp3" }
+      { id: 1, title: "PROTOKÓŁ 01", puzzleText: "PLACEHOLDER — tutaj znajdzie się zagadka POSIO nr 1.", answer: "test1", digit: "4", audio: "audio/posio_01.mp3" },
+      { id: 2, title: "PROTOKÓŁ 02", puzzleText: "PLACEHOLDER — tutaj znajdzie się zagadka POSIO nr 2.", answer: "test2", digit: "2", audio: "audio/posio_02.mp3" },
+      { id: 3, title: "PROTOKÓŁ 03", puzzleText: "PLACEHOLDER — tutaj znajdzie się zagadka POSIO nr 3.", answer: "test3", digit: "0", audio: "audio/posio_03.mp3" }
     ], finalAudio: "audio/posio_final.mp3"
   },
   bacik: {
@@ -19,9 +19,10 @@ const GAME_CONFIG = {
 };
 
 const params = new URLSearchParams(window.location.search);
-const playerId = params.get("player");
+// Wspólna gra dla POSIO i BACIKA — adres nie wybiera już osobnej ścieżki.
+const playerId = "shared";
 const debugMode = params.get("debug") === "1";
-const config = GAME_CONFIG[playerId];
+const config = { ...GAME_CONFIG.posio, playerName: "POSIO X BACIK" };
 const app = document.querySelector("#app");
 const storageKey = `security_game_${playerId}`;
 let state;
@@ -114,8 +115,9 @@ function showInvalid() {
 }
 function showStart() {
   state.screen = "start"; saveState();
-  render(`<div class="content start-content"><span class="eyebrow glitch-target" data-text="IDENTITY VERIFIED">IDENTITY VERIFIED${glitchSlices()}</span><h1 class="player-name glitch-target" data-text="${escapeHtml(config.playerName)}">${animatedPlayerName(config.playerName)}${glitchSlices()}</h1><p class="subtitle">${escapeHtml(config.gameTitle)}</p><p class="message">Dostęp do zawartości został zablokowany.<br><br>Aby odzyskać kod dostępu, przejdź procedurę weryfikacji.</p><div class="actions"><button class="button" data-action="start">ROZPOCZNIJ</button></div></div>${footer()}${debugPanel()}`, playerId === "posio" ? "start-page" : "");
+  render(`<div class="content start-content"><span class="eyebrow glitch-target" data-text="IDENTITY VERIFIED">IDENTITY VERIFIED${glitchSlices()}</span><h1 class="player-name glitch-target" data-text="${escapeHtml(config.playerName)}">${animatedPlayerName(config.playerName)}${glitchSlices()}</h1><p class="subtitle">${escapeHtml(config.gameTitle)}</p><div class="actions"><button class="button" data-action="start">ROZPOCZNIJ</button></div></div>${footer()}${debugPanel()}`, "start-page");
   startLogoGlitch();
+  document.querySelector('[data-action="start"]')?.addEventListener("click", () => { state = defaultState(); saveState(); });
   bindDebug();
 }
 function showBriefing() {
@@ -153,9 +155,12 @@ function startJumpGame() {
   const playerImage = new Image();
   const runnerImage = new Image();
   const gameAudio = new Audio("./audio/zesraciesi%C4%99zestrachu.mp3");
+  const catchAudio = new Audio("./audio/hahaha.mp3");
   gameAudio.preload = "auto";
+  catchAudio.preload = "auto";
   gameAudio.loop = false;
   gameAudio.load();
+  catchAudio.load();
   playerImage.src = "./assets/images/gra%20zmuda.png";
   runnerImage.src = "./assets/images/chlopieczestrzelnicy.png";
   const player = { x: 62, y: 0, width: 360, height: 450, velocity: 0, jumping: false };
@@ -226,7 +231,17 @@ function startJumpGame() {
       finish();
       const collisionGif = document.querySelector("#collision-gif");
       collisionGif.hidden = false;
-      collisionTimer = setTimeout(completeWin, 2800);
+      let catchSequenceFinished = false;
+      const finishCatchSequence = () => {
+        if (catchSequenceFinished) return;
+        catchSequenceFinished = true;
+        completeWin();
+      };
+      catchAudio.currentTime = 0;
+      catchAudio.addEventListener("ended", finishCatchSequence, { once: true });
+      catchAudio.addEventListener("error", finishCatchSequence, { once: true });
+      catchAudio.play().catch(finishCatchSequence);
+      collisionTimer = setTimeout(finishCatchSequence, 10000);
     }, 700);
     animationId = requestAnimationFrame(draw);
   };
@@ -281,8 +296,10 @@ function startJumpGame() {
 }
 function showGameDigit(digit) {
   state.screen = "stage"; saveState();
-  render(`${header("PROTOKÓŁ 01 / 03")}<div class="content game-digit-content"><div class="eyebrow">KOD DO KŁÓDKI</div><h2>CYFRA ODSZYFROWANA</h2><div class="game-digit">${escapeHtml(digit)}</div><div class="fleet-status">PRZEJŚCIE DO KOLEJNEGO ETAPU</div></div>${footer()}${debugPanel()}`);
-  collisionTimer = setTimeout(showFleetTransition, 2400);
+  render(`${header(`PROTOKÓŁ ${String(Math.min(state.currentStage, config.stages.length)).padStart(2, "0")} / 03`)}<div class="content game-digit-content"><div class="eyebrow">KOD DO KŁÓDKI</div><h2>CYFRA ODSZYFROWANA</h2><div class="game-digit">${escapeHtml(digit)}</div><div class="fleet-status">PRZEJŚCIE DO KOLEJNEGO ETAPU</div><div class="actions"><button class="button" data-action="next">DALEJ</button></div></div>${footer()}${debugPanel()}`);
+  if (state.currentStage === 1) document.querySelector('[data-action="next"]').addEventListener("click", event => { event.stopImmediatePropagation(); showFleetTransition(); });
+  bindDebug();
+  if (state.currentStage === 1) collisionTimer = setTimeout(showFleetTransition, 2400);
 }
 function showFleetTransition() {
   state.screen = "fleet-transition"; saveState();
@@ -302,9 +319,13 @@ function showFleetTransition() {
   audio.src = "./audio/gotenhafen.mp3";
   audio.load();
 }
+const ENEMY_FLEET_CELLS = [0, 1, 2, 3, 20, 21, 22, 32, 33, 34, 53, 54];
+const PLAYER_FLEET_CELLS = [7, 15, 23, 31, 40, 41, 42, 11, 19, 27, 62, 63];
+
 function showBattleshipGame() {
   state.screen = "stage"; saveState();
-  const makeGrid = (name, own = false) => Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = String.fromCharCode(65 + index % 8); const coordinate = `${column}${row + 1}`; const shipCells = new Set([0, 1, 2, 3, 20, 21, 22, 32, 33, 34, 53, 54]); return `<button class="fleet-cell${own && shipCells.has(index) ? " fleet-ship" : ""}" data-fleet-${name}="${index}" data-coordinate="${coordinate}" aria-label="${own ? "Twoje pole" : "Cel"} ${coordinate}" disabled></button>`; }).join("");
+  const ownFleet = new Set(PLAYER_FLEET_CELLS);
+  const makeGrid = (name, own = false) => Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = String.fromCharCode(65 + index % 8); const coordinate = `${column}${row + 1}`; return `<button class="fleet-cell${own && ownFleet.has(index) ? " fleet-ship" : ""}" data-fleet-${name}="${index}" data-coordinate="${coordinate}" aria-label="${own ? "Twoje pole" : "Cel"} ${coordinate}" disabled></button>`; }).join("");
   render(`${header("PROTOKÓŁ 02 / 03")}<div class="content fleet-content"><div class="fleet-panel"><div class="fleet-score" id="fleet-score">0 / 12</div><div class="fleet-card" id="fleet-card"><div class="fleet-card-inner" id="fleet-card-inner"><div class="fleet-card-face fleet-front"><div class="fleet-label">WODY PRZECIWNIKA <span>— NAMIERZANIE</span></div><div class="fleet-grid" id="enemy-grid">${makeGrid("enemy")}</div></div><div class="fleet-card-face fleet-back"><div class="fleet-label">TWOJA FLOTA <span>— STATUS</span></div><div class="fleet-grid" id="player-grid">${makeGrid("player", true)}</div></div></div></div><div class="fleet-status" id="fleet-status">NACIŚNIJ START, ABY ROZPOCZĄĆ</div><button class="button fleet-start" id="fleet-start">START BITWY</button><button class="button fleet-next" id="fleet-next" hidden>DALEJ</button></div></div>${footer()}${debugPanel()}`);
   startBattleshipGame(); bindDebug();
 }
@@ -331,15 +352,15 @@ function startBattleshipGame() {
   hitAudioFinal.preload = "auto";
   hitAudioFinal.load();
   let hitCommentIndex = 0;
-  const enemyFleet = new Set([0, 1, 2, 3, 20, 21, 22, 32, 33, 34, 53, 54]);
-  let playerFleet = new Set([0, 1, 2, 3, 20, 21, 22, 32, 33, 34, 53, 54]);
-  const enemyShots = [32, 24, 33, 40, 16, 8, 34, 48, 12, 60];
+  const enemyFleet = new Set(ENEMY_FLEET_CELLS);
+  const playerFleet = new Set(PLAYER_FLEET_CELLS);
+  const enemyShots = [7, 24, 15, 40, 16, 11, 48, 42, 60, 27];
   let hits = 0;
   let enemyTurn = 0;
   let started = false;
   let finished = false;
   let playerTurn = false;
-  skipButton.addEventListener("click", () => { finished = true; playerTurn = false; clearTimeout(fleetTurnTimer); state.digits[1] = config.stages[1].digit; state.completedStages = [...new Set([...state.completedStages, config.stages[1].id])]; state.currentStage = 2; saveState(); showStage(); });
+  skipButton.addEventListener("click", () => { finished = true; playerTurn = false; clearTimeout(fleetTurnTimer); state.digits[1] = config.stages[1].digit; state.completedStages = [...new Set([...state.completedStages, config.stages[1].id])]; state.currentStage = 2; saveState(); showGameDigit(config.stages[1].digit); });
   const enemyCells = [...enemyGrid.querySelectorAll("[data-fleet-enemy]")];
   const playerCells = [...playerGrid.querySelectorAll("[data-fleet-player]")];
   const setStatus = message => { status.textContent = message; };
@@ -353,7 +374,7 @@ function startBattleshipGame() {
     saveState();
     setStatus("FLOTA PRZECIWNIKA ZNISZCZONA");
     nextButton.hidden = false;
-    nextButton.addEventListener("click", () => playAudio(config.stages[1].audio, false), { once: true });
+    nextButton.addEventListener("click", () => showGameDigit(config.stages[1].digit), { once: true });
   };
   const enemyAttack = () => {
     if (enemyTurn >= enemyShots.length) { playerTurn = true; setStatus("TWOJA TURA — NAMIERZ OKRĘT"); return; }
@@ -409,6 +430,47 @@ function startBattleshipGame() {
     setStatus("TWOJA TURA — NAMIERZ OKRĘT");
   });
 }
+function showTargetGame() {
+  state.screen = "stage";
+  saveState();
+  render(`${header("PROTOKÓŁ 03 / 03")}<div class="content target-game-content"><div class="target-game"><div class="target-game-hud"><span>SZYFR // NAMIERZANIE</span><strong id="target-score">0 / 5</strong></div><div class="target-board" id="target-board"><button class="target-mark" id="target-mark" aria-label="Namierz cel">◎</button></div><p class="target-status" id="target-status">NAMIERZ I ZŁAP SYGNAŁ</p><button class="button target-next" id="target-next" hidden>ODBIERZ CYFRĘ</button></div></div>${footer()}${debugPanel()}`, "game-screen");
+  const target = document.querySelector("#target-mark");
+  const score = document.querySelector("#target-score");
+  const status = document.querySelector("#target-status");
+  const next = document.querySelector("#target-next");
+  let hits = 0;
+  let complete = false;
+  const moveTarget = () => {
+    target.style.left = `${8 + Math.random() * 78}%`;
+    target.style.top = `${12 + Math.random() * 70}%`;
+  };
+  target.addEventListener("click", () => {
+    if (complete) return;
+    hits += 1;
+    score.textContent = `${hits} / 5`;
+    target.classList.remove("target-hit");
+    void target.offsetWidth;
+    target.classList.add("target-hit");
+    if (hits < 5) return moveTarget();
+    complete = true;
+    target.hidden = true;
+    state.digits[2] = config.stages[2].digit;
+    state.completedStages = [...new Set([...state.completedStages, config.stages[2].id])];
+    state.currentStage = config.stages.length;
+    saveState();
+    status.textContent = "SYGNAŁ PRZECHWYCONY";
+    next.hidden = false;
+  });
+  next.addEventListener("click", () => {
+    state.completed = true;
+    state.screen = "complete";
+    saveState();
+    showComplete();
+  });
+  moveTarget();
+  bindDebug();
+}
+
 function showContraGame() {
   state.screen = "stage"; saveState();
   render(`${header("PROTOKOL 03 / 03")}<div class="content contra-content"><div class="contra-panel"><div class="contra-viewport"><canvas id="contra-game" tabindex="0" aria-label="Gra zręcznościowa w stylu Contra"></canvas></div><div class="contra-status" id="contra-status">NACISNIJ START, ABY ROZPOCZAC</div><div class="contra-keyboard">← → RUCH · ↑ ↓ CELOWANIE · Z STRZAL · X / SPACJA SKOK · P PAUZA</div><button class="button contra-start" id="contra-start">START GRY</button><div class="contra-controls" aria-label="Sterowanie grą"><div class="contra-pad"><button class="button secondary" data-contra-control="up" aria-label="Celuj w górę">▲</button><button class="button secondary" data-contra-control="left" aria-label="Ruch w lewo">◀</button><button class="button secondary" data-contra-control="down" aria-label="Celuj w dół">▼</button><button class="button secondary" data-contra-control="right" aria-label="Ruch w prawo">▶</button></div><div class="contra-actions"><button class="button secondary" data-contra-control="jump">A<br><small>SKOK</small></button><button class="button secondary" data-contra-control="fire">B<br><small>STRZAL</small></button></div></div></div></div>${footer()}${debugPanel()}`, "contra-screen");
@@ -466,7 +528,7 @@ function showStage() {
   if (!stage) return showFinalAudio();
   if (index === 0) return showJumpGame();
   if (index === 1) return showBattleshipGame();
-  if (index === 2) return showContraGame();
+  if (index === 2) return showTargetGame();
   state.screen = "stage"; saveState();
   render(`${header(`PROTOKÓŁ ${String(index + 1).padStart(2, "0")} / 03`)}<div class="content"><div class="progress-wrap"><div class="progress-label"><span>POSTĘP PROCEDURY</span><span>${index + 1} / ${config.stages.length}</span></div><div class="progress-track"><div class="progress-bar" style="width:${(index / config.stages.length) * 100}%"></div></div></div><div class="stage-kicker">${escapeHtml(stage.title)}</div><div class="puzzle-panel" id="puzzle-panel"><h2>Weryfikacja danych</h2><p class="puzzle-text">${escapeHtml(stage.puzzleText)}</p><form class="answer-form" id="answer-form"><label class="label" for="answer">ODPOWIEDŹ</label><input class="answer-input" id="answer" name="answer" autocomplete="off" autocapitalize="none" spellcheck="false" required><button class="button" type="submit">SPRAWDŹ</button><div class="feedback" id="feedback" role="status"></div></form></div><div class="pin-title">PIN</div><div class="pin-row">${pinPreview()}</div></div>${footer()}${debugPanel()}`);
   document.querySelector("#answer-form").addEventListener("submit", e => checkAnswer(e, stage));
@@ -496,9 +558,36 @@ function playAudio(path, isFinal, onComplete = null, customLabel = "") {
 }
 function audioFinished(isFinal) { if (isFinal) { state.completed = true; state.screen = "complete"; saveState(); showComplete(); } else { state.currentStage += 1; saveState(); showDigit(); } }
 function showDigit() { render(`${header()}<div class="content"><span class="eyebrow">WERYFIKACJA ZAKOŃCZONA</span><h2>CYFRA ODSZYFROWANA</h2><div class="pin-title" style="margin-top:32px">PIN</div><div class="pin-row">${pinPreview()}</div><div class="actions"><button class="button" data-action="next">DALEJ</button></div></div>${footer()}${debugPanel()}`); bindDebug(); }
-function showFinalAudio() { state.screen = "final-audio"; saveState(); playAudio(config.finalAudio, true); }
-function showComplete() { render(`${header("ACCESS GRANTED")}<div class="content"><div class="final-panel"><div class="eyebrow">PROCEDURA ZAKOŃCZONA</div><h1>ACCESS<br>GRANTED</h1><div class="pin-title" style="margin-top:34px">KOD DOSTĘPU</div><div class="final-pin">${escapeHtml(config.finalPin)}</div><p class="message">Procedura zakończona.<br>Możesz otworzyć kłódkę.</p></div></div>${footer()}${debugPanel()}`); bindDebug(); }
+function showFinalAudio() { state.completed = true; state.screen = "complete"; saveState(); showComplete(); }
+function showEndingVideo() {
+  state.screen = "ending-video";
+  saveState();
+  render(`<div class="ending-video-frame"><video class="ending-video" id="ending-video" autoplay playsinline controls><source src="./assets/images/ZAKOŃCZENIE.mov" type="video/quicktime">Twoja przeglądarka nie obsługuje tego filmu.</video><div class="ending-video-ui"><span>TRANSMISJA KOŃCOWA</span><button class="home-button ending-skip" id="ending-skip">POMIŃ FILM</button></div></div>`, "ending-video-screen");
+  const video = document.querySelector("#ending-video");
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    state.completed = true;
+    state.screen = "complete";
+    saveState();
+    showComplete();
+  };
+  video.addEventListener("ended", finish, { once: true });
+  video.addEventListener("error", finish, { once: true });
+  video.play().catch(() => {});
+  document.querySelector("#ending-skip").addEventListener("click", finish);
+}
+function showComplete() {
+  render(`${header("ACCESS GRANTED")}<div class="content ending-content"><div class="ending-stage"><video class="ending-stage-video" id="ending-stage-video" loop playsinline><source src="./assets/images/ZAKONCZENIE.mp4" type="video/mp4"></video><img class="ending-code-overlay" src="./assets/images/NAKLADKA%20ZAKONCZENIE.gif" alt="420"></div></div>`, "ending-video-screen");
+  const endingVideo = document.querySelector("#ending-stage-video");
+  endingVideo.muted = false;
+  endingVideo.volume = 1;
+  endingVideo.play().catch(() => { endingVideo.controls = true; });
+  bindDebug();
+}
 function bindDebug() { document.querySelectorAll("[data-action]").forEach(b => b.addEventListener("click", () => b.dataset.action === "start" ? showIntroAudio() : b.dataset.action === "briefing" ? showStage() : b.dataset.action === "home" ? (state = defaultState(), saveState(), showStart()) : b.dataset.action === "next" ? (state.currentStage >= config.stages.length ? showFinalAudio() : showStage()) : null)); document.querySelectorAll("[data-debug]").forEach(b => b.addEventListener("click", () => { const action = b.dataset.debug; if (action === "reset" || action === "clear") { localStorage.removeItem(storageKey); state = defaultState(); showStart(); } else if (action === "skip" && state.currentStage < config.stages.length) { state.digits[state.currentStage] = config.stages[state.currentStage].digit; state.completedStages = [...new Set([...state.completedStages, config.stages[state.currentStage].id])]; state.currentStage = Math.min(state.currentStage + 1, config.stages.length); saveState(); showStage(); } else if (action === "final") { state.currentStage = config.stages.length; saveState(); showFinalAudio(); } })); document.querySelectorAll("[data-stage]").forEach(b => b.addEventListener("click", () => { state.currentStage = Number(b.dataset.stage); state.screen = "stage"; saveState(); showStage(); })); }
 
-if (!config) showInvalid();
-else { state = loadState(); if (state.completed) showComplete(); else if (state.screen === "stage") showStage(); else if (state.screen === "briefing") showStage(); else if (state.screen === "intro-audio") showIntroAudio(); else if (state.screen === "fleet-transition") showFleetTransition(); else if (state.screen === "final-audio") showFinalAudio(); else if (state.currentStage > 0) showDigit(); else showStart(); }
+// Każde wejście z adresu zaczyna od wspólnego ekranu startowego.
+state = loadState();
+showStart();
